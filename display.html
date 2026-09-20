@@ -293,19 +293,28 @@ let state = structuredClone(DEFAULT_STATE);
 function esc(s) {
   return String(s).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 }
-function isDone(a) { return a.max !== null && Number(a.current) >= Number(a.max); }
+function isDone(a) { return a.max != null && Number(a.current) >= Number(a.max); }
+
+// Firebase Realtime Database ne stocke pas les valeurs `null` : un champ
+// enregistré à `null` (= "pas de limite") revient sous forme de clé absente
+// (`undefined`) après lecture. On uniformise ça ici pour ne plus jamais
+// distinguer les deux cas dans le reste du code.
+function normalizeState(s) {
+  (s.actions || []).forEach(a => { if (a.max === undefined) a.max = null; });
+  return s;
+}
 
 function renderDisplay() {
   document.getElementById("dEverySub").textContent=state.everySub;
   document.getElementById("dActionCount").textContent=state.actions.length+" récompenses";
   document.getElementById("displayActions").innerHTML=state.actions.map(a=>{
     const done=isDone(a);
-    const pct=a.max===null?0:Math.min(100,Math.max(0,(Number(a.current)/Number(a.max))*100));
-    const progress=a.max===null?"":`<div class="d-progress"><div style="width:${pct}%"></div></div>`;
+    const pct=a.max==null?0:Math.min(100,Math.max(0,(Number(a.current)/Number(a.max))*100));
+    const progress=a.max==null?"":`<div class="d-progress"><div style="width:${pct}%"></div></div>`;
     return `<div class="d-action ${done?"done":""}">
       <div class="cost ${a.cost===1?"c1":a.cost===2?"c2":"c5"}">${a.cost} SUB${a.cost>1?"S":""}</div>
       <div class="d-label">${esc(a.text)}${progress}</div>
-      <div class="d-count">${a.max===null?"":`<b>${Math.min(a.current,a.max)}/${a.max}</b>`}</div>
+      <div class="d-count">${a.max==null?"":`<b>${Math.min(a.current,a.max)}/${a.max}</b>`}</div>
     </div>`;
   }).join("");
   document.getElementById("displaySubs").innerHTML=state.goalsub.map(g=>`
@@ -326,7 +335,7 @@ renderDisplay();
 // cette page se met à jour instantanément, sans recharger la page.
 rtdb.ref("state").on("value", (snap)=>{
   if(snap.exists()){
-    state = snap.val();
+    state = normalizeState(snap.val());
     renderDisplay();
   }
 });
